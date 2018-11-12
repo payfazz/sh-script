@@ -9,6 +9,9 @@ if [ "$#" -lt 3 ]; then
   exit 1
 fi
 
+trap 'trap "" TERM; kill -s TERM -- -$$' TERM
+trap 'trap "" INT;  kill -s INT -- -$$'  INT
+
 next=$1
 interval=$2
 cmd=$3
@@ -22,7 +25,7 @@ if [ "$interval" = 0 ]; then
     echo "time is in the past" >&2
     exit 1
   fi
-  sleep "$sleep_duration"
+  sleep "$sleep_duration" & wait $!
   exec "$cmd" "$@"
 fi
 
@@ -32,7 +35,8 @@ fi
 
 rc=0
 while :; do
-  sleep "$(( next - now ))"
+  sleep_duration="$(( next - now ))"
+  sleep "$sleep_duration" & wait $!
   start=$(date +%s)
   "$cmd" "$@" || rc=$?
   if [ "$rc" != 0 ]; then
