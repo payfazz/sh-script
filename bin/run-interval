@@ -1,0 +1,43 @@
+#!/bin/sh
+
+set -eu
+
+if [ "$#" -lt 3 ]; then
+  echo "USAGE: $0 <begin> <interval> <cmd> [args...]" >&2
+  echo "- <begin> must be unix timestamp" >&2
+  echo "- <interval> must be in second, non-negative, if 0 then script only run once" >&2
+  exit 1
+fi
+
+next=$1
+interval=$2
+cmd=$3
+shift 3
+
+now=$(date +%s)
+
+if [ "$interval" = 0 ]; then
+  sleep_duration=$(( next - now ))
+  if [ "$sleep_duration" -le 0 ]; then
+    echo "time is in the past" >&2
+    exit 1
+  fi
+  sleep "$sleep_duration"
+  exec "$cmd" "$@"
+fi
+
+if [ "$now" -gt "$next" ]; then
+  next=$(( now + ( interval - ( ( now - next ) % interval ) ) ))
+fi
+
+rc=0
+while :; do
+  sleep "$(( next - now ))"
+  start=$(date +%s)
+  "$cmd" "$@" || rc=$?
+  if [ "$rc" != 0 ]; then
+    echo "job exited with exit code $rc"
+  fi
+  now=$(date +%s)
+  next=$(( next + interval + ( ( ( now - start ) / interval ) * interval ) ))
+done
