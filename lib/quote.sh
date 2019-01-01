@@ -18,10 +18,10 @@ quote() (
               nextop=RN; tmp=
               if [ -z "$token" ]; then [ -z "$rest" ] && tmp=y;
               else [ -n "$curr" ] && tmp=y; fi
-              if [ "$tmp" ]; then ret="$ret'$curr' "; curr=; count=$((count-1)); fi ;;
+              if [ "$tmp" ]; then ret="$ret'$curr' "; curr=; : $((count=count-1)); fi ;;
           *)  case $no_proc in
               y)  ret="$ret$(printf %s\\n "$token" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/") "
-                  count=$((count-1)); nextop=RN ;;
+                  : $((count=count-1)); nextop=RN ;;
               n)  case $token in
                   *[\\\'\"]*)
                       tmp=${token%%[\\\'\"]*}; token=${token#"$tmp"}; curr="$curr$tmp"
@@ -30,7 +30,7 @@ quote() (
                       \'*) token=${token#\'}; nextop=PQ ;;
                       \"*) token=${token#\"}; nextop=PD ;;
                       esac ;;
-                  *)  ret="$ret'$curr$token' "; curr=; count=$((count-1)); nextop=RN ;;
+                  *)  ret="$ret'$curr$token' "; curr=; : $((count=count-1)); nextop=RN ;;
                   esac ;;
               esac ;;
           esac ;;
