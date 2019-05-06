@@ -20,7 +20,7 @@ quote() (
               else [ -n "$curr" ] && tmp=y; fi
               if [ "$tmp" ]; then ret="$ret'$curr' "; curr=; : $((count=count-1)); fi ;;
           *)  case $no_proc in
-              y)  ret="$ret$(printf %s\\n "$token" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/") "
+              y)  ret="$ret$(printf %s\\n "$token" | LC_ALL=C sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/") "
                   : $((count=count-1)); nextop=RN ;;
               n)  case $token in
                   *[\\\'\"]*)
