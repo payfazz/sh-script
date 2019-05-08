@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -eu
+
+define_user=1
+randomname="work-$(tr -cd 0-9a-f < /dev/urandom | head -c 8)"
+uid=$(id -u)
+gid=$(id -g)
+
+for arg in "$@"; do
+    case "$arg" in
+        -u*|--user|--user=*) define_user=0;;
+    esac
+done
+
+docker_cmds=(exec docker run -it --rm --name $randomname -v "$PWD:/work" -e HOME=/work -w /work)
+
+if [[ $define_user == 1 ]]; then 
+  docker_cmds+=( -u $uid:$gid )
+  ( ( sleep 1 && exec docker exec -u 0:0 $randomname sh -c "
+    sed -i '/[^:]*:[^:]*:$uid:/d' /etc/passwd
+    echo "work:x:$uid:$gid::/work:/bin/sh" >> /etc/passwd
+    sed -i '/[^:]*:[^:]*:$gid:/d' /etc/group
+    echo "work:x:$gid:" >> /etc/group
+  " > /dev/null 2>&1 ) & )
+fi
+
+
+"${docker_cmds[@]}" "$@"
