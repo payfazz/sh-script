@@ -13,17 +13,22 @@ for arg in "$@"; do
     esac
 done
 
-docker_cmds=(exec docker run -it --rm --name $randomname -v "$PWD:/work" -e HOME=/work -w /work)
+mkdir -p "$PWD/.docker-work-home"
+docker_cmds=(
+  exec docker run -it --rm --name $randomname
+  -v "$PWD:/work"
+  -w /work
+  -e "HOME=/work/.docker-work-home"
+)
 
-if [[ $define_user == 1 ]]; then 
+if [[ $define_user == 1 ]]; then
   docker_cmds+=( -u $uid:$gid )
-  ( ( sleep 1 && exec docker exec -u 0:0 $randomname sh -c "
+  ( ( sleep 1 && exec docker exec -u 0:0 "$randomname" sh -c "
     sed -i '/[^:]*:[^:]*:$uid:/d' /etc/passwd
-    echo "work:x:$uid:$gid::/work:/bin/sh" >> /etc/passwd
+    printf '\nwork:x:%d:%d::/work/.docker-work-home:/bin/sh\n' $uid $gid >> /etc/passwd
     sed -i '/[^:]*:[^:]*:$gid:/d' /etc/group
-    echo "work:x:$gid:" >> /etc/group
+    printf '\nwork:x:%d:\n' $gid >> /etc/group
   " > /dev/null 2>&1 ) & )
 fi
-
 
 "${docker_cmds[@]}" "$@"
