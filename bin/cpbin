@@ -1,0 +1,61 @@
+#!/bin/bash
+
+set -eu
+
+if [[ $# -lt 1 ]]; then
+	echo "please provide target root directory and which program files to copy" >&2
+	exit 1
+fi
+
+ROOT=${1%/}
+shift
+
+if [[ ! -d "$ROOT" ]]; then
+	echo "\"$ROOT\" is not a directory" >&2
+	exit 1
+fi
+
+echo_cmd() {
+	echo "$@"
+	"$@"
+}
+
+cp_file() {
+	[[ -e "$ROOT$1" ]] && return 0
+	local REAL="$(realpath "$1")"
+	mkdir -p "$(dirname "$ROOT$REAL")"
+	if [[ ! -e "$ROOT$REAL" ]] || [[ "$ROOT$REAL" -ot "$REAL" ]]; then
+		echo_cmd cp -a "$REAL" "$ROOT$REAL"
+	fi
+	if [[ "$1" != "$REAL" ]]; then
+		local RDIR="$ROOT$(dirname "$1")"
+		mkdir -p "$RDIR"
+		echo_cmd ln -s "$(realpath --relative-to="$RDIR" "$ROOT$REAL")" "$ROOT$1"
+	fi
+}
+
+cp_bin() {
+	local WHAT=$1
+	if [[ "$WHAT" != /* ]]; then
+		WHAT=$(which "$WHAT")
+	fi
+
+	if [[ ! -f "$WHAT" ]]; then
+		echo "No such file $WHAT" >&2
+		return 1
+	fi
+
+	cp_file "$WHAT"
+	local DONE=false
+	ldd "$WHAT" | grep -o '/.* (' | sed -e 's| (||' | until $DONE; do
+		read -r f || DONE=true
+		if echo "$f" | grep -F '=>' > /dev/null 2>&1; then
+			cp_file "$(echo "$f" | grep -o '=> .*' | sed -e 's|=> ||')"
+			cp_file "$(echo "$f" | grep -o '.* =>' | sed -e 's| =>||')"
+		else
+			cp_file "$f"
+		fi
+	done
+}
+
+for prog in "$@"; do cp_bin "$prog"; done
