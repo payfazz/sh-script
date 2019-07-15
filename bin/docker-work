@@ -2,20 +2,47 @@
 
 set -eu
 
+panic() {
+  echo "$@" >&2
+  exit 1
+}
+
 define_user=1
-randomname="work-$(tr -cd 0-9a-f < /dev/urandom | head -c 8)"
+randomname="work-$(LC_ALL=C tr -cd 0-9a-f < /dev/urandom | head -c 8)"
 uid=$(id -u)
 gid=$(id -g)
 
 for arg in "$@"; do
-    case "$arg" in
-        -u*|--user|--user=*) define_user=0;;
-    esac
+  case "$arg" in
+    -u*|--user|--user=*) define_user=0;;
+    --name) panic "$arg is not supported";;
+    -h*|--hostname|--hostname=*) panic "$arg is not supported";;
+  esac
 done
 
 mkdir -p "$PWD/.docker-work-home"
+if ! [[ -f "$PWD/.docker-work-home/.bashrc" ]]; then
+  cat <<EOF > "$PWD/.docker-work-home/.bashrc"
+if [[ -z "\$DOCKER_WORK_BOOTSTRAPED" ]]; then
+  count=0
+  while :; do
+    if [[ -f /tmp/.docker-work-bootstraped ]]; then
+      export DOCKER_WORK_BOOTSTRAPED=1
+      exec "\$0" "\$@"
+    fi
+    count=\$((count + 1))
+    if [[ "\$count" -gt 50 ]]; then
+      break
+    fi
+    sleep 0.1 2>/dev/null || sleep 1
+  done
+  unset count
+fi
+EOF
+fi
+
 docker_cmds=(
-  exec docker run -it --rm --name $randomname
+  exec docker run -it --rm --name "$randomname" --hostname "$randomname"
   -v "$PWD:/work"
   -w /work
   -e "HOME=/work/.docker-work-home"
@@ -23,12 +50,24 @@ docker_cmds=(
 
 if [[ $define_user == 1 ]]; then
   docker_cmds+=( -u $uid:$gid )
-  ( ( sleep 1 && exec docker exec -u 0:0 "$randomname" sh -c "
-    sed -i '/[^:]*:[^:]*:$uid:/d' /etc/passwd
-    printf '\nwork:x:%d:%d::/work/.docker-work-home:/bin/sh\n' $uid $gid >> /etc/passwd
-    sed -i '/[^:]*:[^:]*:$gid:/d' /etc/group
-    printf '\nwork:x:%d:\n' $gid >> /etc/group
-  " > /dev/null 2>&1 ) & )
+  ( (
+    count=0
+    while :; do
+      docker exec -u 0:0 "$randomname" sh -ceux "
+        sed -i '/[^:]*:[^:]*:$gid:/d' /etc/group
+        printf '\nwork:x:%d:\n' $gid >> /etc/group
+        sed -i '/[^:]*:[^:]*:$uid:/d' /etc/passwd
+        printf '\nwork:x:%d:%d::/work/.docker-work-home:/bin/sh\n' $uid $gid >> /etc/passwd
+        echo '$randomname' > /tmp/.docker-work-bootstraped
+      " > /dev/null 2>&1 && exit 0
+
+      count=$((count + 1))
+      if [[ "$count" -gt 50 ]]; then
+        break
+      fi
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+  ) & )
 fi
 
 "${docker_cmds[@]}" "$@"
