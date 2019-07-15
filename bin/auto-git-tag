@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -eu
+
+git status -s > /dev/null
+
+if [ -z "$(git status -s)" ]; then
+  time=$(date -d "@$(git log -1 '--pretty=format:%cd' '--date=unix' HEAD)" --utc '+%Y%m%d%H%M%S')
+  commit=$(git log -1 '--pretty=format:%H' HEAD | head -c 12)
+  printf %s\\n "$time-$commit"
+else
+  echo "git is not clean" >&2
+  exit 1
+fi
